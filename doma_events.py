@@ -448,7 +448,7 @@ def _sanitize_strict_app_domain(raw_domain: Any) -> str:
         return ""
     if clean_domain.count(".app") != 1:
         return ""
-    keyword = clean_domain[:-4]
+    keyword = clean_domain.removesuffix(".app")
     if not keyword or "." in keyword:
         return ""
     if not re.fullmatch(r"[a-z0-9-]+", keyword):
@@ -888,7 +888,7 @@ class SpaceshipClient:
         Bulk-check up to SPACESHIP_BULK_BATCH_SIZE domains in a single POST.
 
         Endpoint: POST {base_url}/domains/available
-        Body:     {"domains": ["d1.app", "d2.ai", ...]}
+        Body:     {"domains": ["d1.app", "d2.app", ...]}
 
         Returns (opportunities, failed_count).
         """
