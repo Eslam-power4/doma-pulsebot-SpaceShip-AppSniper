@@ -23,16 +23,16 @@ LOGGER = logging.getLogger(__name__)
 
 # ─── Tuning constants ────────────────────────────────────────────────────────
 MAIN_CHAT_ID = -1003736596502
-# Strict .com mode: all available alerts are routed to the fixed topic below.
-TELEGRAM_TOPIC_ID = 33361
-PRIORITY_TLDS = frozenset({".com"})
+# Strict .app mode: all available alerts are routed to the fixed topic below.
+TELEGRAM_TOPIC_ID = 127328
+PRIORITY_TLDS = frozenset({".app"})
 
 MIN_POLL_SECONDS = 1
 MIN_QUOTA_COOLDOWN_SECONDS = 30
 MIN_CIRCUIT_BREAKER_SECONDS = 30
 DEFAULT_FALLBACK_ASK_PRICE_USD = 10.0
 WATCHER_ERROR_RETRY_SECONDS = 5
-TARGET_TLDS = {".com"}
+TARGET_TLDS = {".app"}
 PROCESSED_STATUS_AVAILABLE = "Available"
 PROCESSED_STATUS_TAKEN = "Taken"
 PROCESSED_STATUS_ERROR = "Error"
@@ -185,7 +185,7 @@ SPACESHIP_STUBBORN_MAX_BACKOFF_SECONDS = 32
 DEFAULT_STATUS_EMOJI = "🟡"
 PRICE_VERIFICATION_FAILED_TEXT = "Verification Failed (Check Manually!)"
 PROCESSED_CSV_LOCK = threading.Lock()
-PROCESSED_CSV_PATH = Path(__file__).with_name("processed_domains.csv")
+PROCESSED_CSV_PATH = Path(__file__).with_name("processed_app_domains.csv")
 
 
 class SpaceshipCircuitOpenError(Exception):
@@ -226,12 +226,12 @@ class WatcherConfig:
     turbo_poll_seconds: int = 8
     turbo_hours_utc: tuple[tuple[int, int], ...] = ((18, 21),)
     request_timeout_seconds: int = 20
-    db_path: str = "alerts.db"
+    db_path: str = "alerts_app.db"
     max_domains_per_cycle: int = 200
     quota_cooldown_seconds: int = 180
     circuit_breaker_failure_threshold: int = 4
     circuit_breaker_open_seconds: int = 120
-    allowed_tlds: set[str] = field(default_factory=lambda: {".com", ".ai", ".dev"})
+    allowed_tlds: set[str] = field(default_factory=lambda: {".app"})
     high_value_keywords: set[str] = field(
         default_factory=lambda: {
             "ai",
@@ -276,7 +276,7 @@ class WatcherConfig:
             turbo_poll_seconds=int(os.getenv("TURBO_POLL_SECONDS", "8")),
             turbo_hours_utc=parse_turbo_hours(os.getenv("TURBO_HOURS_UTC", "18-21")),
             request_timeout_seconds=int(os.getenv("HTTP_TIMEOUT_SECONDS", "20")),
-            db_path=os.getenv("ALERT_DB_PATH", "alerts.db"),
+            db_path=os.getenv("ALERT_DB_PATH", "alerts_app.db"),
             max_domains_per_cycle=int(os.getenv("MAX_DOMAINS_PER_CYCLE", "200")),
             quota_cooldown_seconds=max(MIN_QUOTA_COOLDOWN_SECONDS, int(os.getenv("QUOTA_COOLDOWN_SECONDS", "180"))),
             circuit_breaker_failure_threshold=max(2, int(os.getenv("CIRCUIT_BREAKER_FAILURE_THRESHOLD", "4"))),
@@ -428,14 +428,14 @@ def _coerce_non_negative_price(value: Any) -> Optional[float]:
     return round(parsed, 2)
 
 
-# REPLACE HERE: Strict .com domain validator module
-def _sanitize_strict_com_domain(raw_domain: Any) -> str:
+# REPLACE HERE: Strict .app domain validator module
+def _sanitize_strict_app_domain(raw_domain: Any) -> str:
     """
-    Strictly validate and normalize a domain with exactly one .com extension.
+    Strictly validate and normalize a domain with exactly one .app extension.
 
     Rules:
     - no whitespace
-    - exactly one trailing .com extension
+    - exactly one trailing .app extension
     - keyword contains only [a-z0-9-]
     - keyword cannot start/end with '-'
     """
@@ -444,9 +444,9 @@ def _sanitize_strict_com_domain(raw_domain: Any) -> str:
         return ""
     if any(ch.isspace() for ch in clean_domain):
         return ""
-    if not clean_domain.endswith(".com"):
+    if not clean_domain.endswith(".app"):
         return ""
-    if clean_domain.count(".com") != 1:
+    if clean_domain.count(".app") != 1:
         return ""
     keyword = clean_domain[:-4]
     if not keyword or "." in keyword:
@@ -455,7 +455,7 @@ def _sanitize_strict_com_domain(raw_domain: Any) -> str:
         return ""
     if keyword.startswith("-") or keyword.endswith("-"):
         return ""
-    return f"{keyword}.com"
+    return f"{keyword}.app"
 
 
 def _read_dict_path(node: dict[str, Any], path: tuple[str, ...]) -> Any:
@@ -534,7 +534,7 @@ def _is_premium_domain_item(item: dict[str, Any]) -> bool:
 
 
 def _find_domain_object_for_query(payload: Any, domain_name: str) -> Optional[dict[str, Any]]:
-    normalized_query = _sanitize_strict_com_domain(domain_name) or str(domain_name or "").strip().lower()
+    normalized_query = _sanitize_strict_app_domain(domain_name) or str(domain_name or "").strip().lower()
     if not normalized_query:
         return None
 
@@ -549,7 +549,7 @@ def _find_domain_object_for_query(payload: Any, domain_name: str) -> Optional[di
             candidate_items = [payload]
 
     for item in candidate_items:
-        item_domain = _sanitize_strict_com_domain(_parse_item_domain(item)) or _parse_item_domain(item)
+        item_domain = _sanitize_strict_app_domain(_parse_item_domain(item)) or _parse_item_domain(item)
         if item_domain and item_domain.lower() == normalized_query:
             return item
     return None
@@ -676,7 +676,7 @@ class SpaceshipClient:
 
     Bulk availability endpoint:
         POST  {base_url}/domains/available
-        Body: {"domains": ["example.com", ...]}   (max 20 per call)
+        Body: {"domains": ["example.app", ...]}   (max 20 per call)
 
     HTTP/transient handling:
         - Every low-level HTTP request gets four attempts with fixed 3-second delay.
@@ -888,7 +888,7 @@ class SpaceshipClient:
         Bulk-check up to SPACESHIP_BULK_BATCH_SIZE domains in a single POST.
 
         Endpoint: POST {base_url}/domains/available
-        Body:     {"domains": ["d1.com", "d2.ai", ...]}
+        Body:     {"domains": ["d1.app", "d2.ai", ...]}
 
         Returns (opportunities, failed_count).
         """
@@ -982,11 +982,11 @@ def _parse_domain_item(item: dict, fallback_domain: str) -> Optional["DomainOppo
     Convert a single Spaceship domain-check result dict into a DomainOpportunity.
 
     Domain and pricing are accepted when:
-      - Domain is a strict .com format with exactly one ".com" extension.
+      - Domain is a strict .app format with exactly one ".app" extension.
       - Price is extracted deterministically via extract_spaceship_price.
     """
-    fallback_sanitized = _sanitize_strict_com_domain(fallback_domain)
-    item_sanitized = _sanitize_strict_com_domain(_parse_item_domain(item))
+    fallback_sanitized = _sanitize_strict_app_domain(fallback_domain)
+    item_sanitized = _sanitize_strict_app_domain(_parse_item_domain(item))
     normalized_domain = item_sanitized or fallback_sanitized
     if not normalized_domain:
         return None
@@ -1116,7 +1116,7 @@ def log_to_processed_csv(
     price_usd: str = "N/A",
 ) -> None:
     """
-    Persist per-domain processing result to processed_domains.csv.
+    Persist per-domain processing result to processed_app_domains.csv.
 
     - Opens file in append mode.
     - Auto-creates with header when absent.
@@ -1147,7 +1147,7 @@ def log_to_processed_csv(
 
 def load_processed_available_domains() -> set[str]:
     """
-    Load processed_domains.csv and return domains previously marked as Available.
+    Load processed_app_domains.csv and return domains previously marked as Available.
     If the status column is missing, processed memory is ignored to avoid skipping non-available domains.
     """
     output_path = PROCESSED_CSV_PATH
@@ -1216,14 +1216,14 @@ def load_processed_available_domains() -> set[str]:
         except OSError as exc:
             LOGGER.warning("Failed reading processed domain memory: %s", exc)
         except csv.Error as exc:
-            LOGGER.warning("Malformed processed_domains.csv: %s", exc)
+            LOGGER.warning("Malformed processed_app_domains.csv: %s", exc)
     return processed_domains
 
 
 def _base_keyword_from_domain(full_domain: str) -> str:
     clean_domain = str(full_domain or "").strip().lower()
-    if clean_domain.endswith(".com"):
-        return clean_domain.removesuffix(".com")
+    if clean_domain.endswith(".app"):
+        return clean_domain.removesuffix(".app")
     return clean_domain.split(".", 1)[0] if "." in clean_domain else clean_domain
 
 
@@ -1241,7 +1241,7 @@ async def check_domains_with_single_retry(
     """
     normalized_domains = []
     for raw_domain in domains:
-        sanitized_domain = _sanitize_strict_com_domain(raw_domain)
+        sanitized_domain = _sanitize_strict_app_domain(raw_domain)
         if not sanitized_domain:
             LOGGER.warning("Skipping invalid domain before API call: %s", raw_domain)
             continue
@@ -1525,8 +1525,8 @@ async def fetch_spaceship_domains(app: Application) -> dict[str, int]:
             )
             app.bot_data["domain_cursor"] = next_cursor
             LOGGER.info("Fetching from Spaceship API: domains=%s", len(selected_domains))
-            com_count = sum(1 for d in selected_domains if d.endswith(".com"))
-            LOGGER.info("Priority coverage this cycle: .com=%s (total=%s)", com_count, len(selected_domains))
+            app_count = sum(1 for d in selected_domains if d.endswith(".app"))
+            LOGGER.info("Priority coverage this cycle: .app=%s (total=%s)", app_count, len(selected_domains))
             opportunities: list[DomainOpportunity] = []
             api_blocked_failed = 0
             for idx in range(0, len(selected_domains), SPACESHIP_BULK_BATCH_SIZE):
@@ -1563,7 +1563,7 @@ async def fetch_spaceship_domains(app: Application) -> dict[str, int]:
                         continue
                     if store.has_alerted(fixed_chat_id, opportunity.domain):
                         continue
-                    sanitized_domain = _sanitize_strict_com_domain(opportunity.domain)
+                    sanitized_domain = _sanitize_strict_app_domain(opportunity.domain)
                     if not sanitized_domain:
                         continue
                     final_verified_price = opportunity.ask_price_usd
