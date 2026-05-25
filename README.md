@@ -77,7 +77,7 @@ GODADDY_CHECK_TYPE=FAST
 # =========================
 ALLOWED_TLDS=.ae,.tech,.my,.com,.app
 MAX_DOMAINS_PER_CYCLE=200
-ALERT_DB_PATH=alerts.db
+ALERT_DB_PATH=alerts_app.db
 
 # =========================
 # Pricing / Opportunity Rules
